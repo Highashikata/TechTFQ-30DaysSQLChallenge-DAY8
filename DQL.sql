@@ -11,88 +11,74 @@ FROM
 	(SELECT *,
 			LAG(JOB_ROLE,1) OVER(ORDER BY ROW_ID) AS PREVIOUS_JOB_ROLE
 		FROM JOB_SKILLS) X;
-*/
+*/ ------ Solution 1
 
------- Solution 1
-SELECT 
-    row_id,
-    COALESCE(job_role, (
-        SELECT job_role 
-        FROM job_skills 
-        WHERE row_id < js.row_id AND job_role IS NOT NULL 
-        ORDER BY row_id DESC 
-        LIMIT 1
-    )) AS job_role,
-    skills
-FROM 
-    job_skills js;
-
+SELECT row_id,
+       COALESCE(job_role,
+                  (SELECT job_role
+                   FROM job_skills
+                   WHERE row_id < js.row_id
+                     AND job_role IS NOT NULL
+                   ORDER BY row_id DESC
+                   LIMIT 1)) AS job_role,
+       skills
+FROM job_skills js;
 
 ------ Solution 2: using a FLAG on each row
+ -- Step 1 : Flag Constrution
 
--- Step 1 : Flag Constrution
 SELECT *,
-		CASE
-             WHEN job_role IS NULL THEN 0
-             ELSE 1
-           END AS flag
-FROM   job_skills
+       CASE
+           WHEN job_role IS NULL THEN 0
+           ELSE 1
+       END AS flag
+FROM job_skills -- Step 2 : Summing over the Flag
 
-
--- Step 2 : Summing over the Flag 
 SELECT *,
-		sum(CASE
-             WHEN job_role IS NULL THEN 0
-             ELSE 1
-           END) over(order by row_id) AS flag
-FROM   job_skills;
-
-
+       sum(CASE
+               WHEN job_role IS NULL THEN 0
+               ELSE 1
+           END) over(
+                     ORDER BY row_id) AS flag
+FROM job_skills;
 
 -- Final query
-SELECT 
-		row_id
-	    ,case 
-			when flag = 1 then 'Data Engineer'
-			when flag = 2 then 'Web Developer'
-			when flag = 3 then 'Data Scientist'
-		END as job_role
-		, skills
-from (SELECT *,
-       Sum(CASE
-             WHEN job_role IS NULL THEN 0
-             ELSE 1
-           END)
-         OVER(
-           ORDER BY row_id) AS flag
-FROM   job_skills ) x;
 
+SELECT row_id ,
+       CASE
+           WHEN flag = 1 THEN 'Data Engineer'
+           WHEN flag = 2 THEN 'Web Developer'
+           WHEN flag = 3 THEN 'Data Scientist'
+       END AS job_role ,
+       skills
+FROM
+  (SELECT *,
+          Sum(CASE
+                  WHEN job_role IS NULL THEN 0
+                  ELSE 1
+              END) OVER(
+                        ORDER BY row_id) AS flag
+   FROM job_skills) x;
 
------- Solution 3: using the same logic 
-
-with cte_skills as(
-	SELECT *,
-       Sum(CASE
-             WHEN job_role IS NULL THEN 0
-             ELSE 1
-           END)
-         OVER(
-           ORDER BY row_id) AS flag
-	FROM   job_skills 
-)
-
-select row_id
-		, first_value(job_role) over(partition by flag order by row_id) as job_role
-		, skills
-from cte_skills;
-
-
+------ Solution 3: using the same logic
+ WITH cte_skills AS
+  (SELECT *,
+          Sum(CASE
+                  WHEN job_role IS NULL THEN 0
+                  ELSE 1
+              END) OVER(
+                        ORDER BY row_id) AS flag
+   FROM job_skills)
+SELECT row_id ,
+       first_value(job_role) over(PARTITION BY flag
+                                  ORDER BY row_id) AS job_role ,
+       skills
+FROM cte_skills;
 
 ------ Solution 4: More tricky Solution, using recursive queyr
-
-WITH RECURSIVE CTE_Recu AS
-  (SELECT row_id ,
-          job_role ,
+ WITH RECURSIVE CTE_Recu AS
+  (SELECT row_id,
+          job_role,
           skills
    FROM job_skills
    WHERE row_id = 1
@@ -104,21 +90,17 @@ WITH RECURSIVE CTE_Recu AS
 SELECT *
 FROM CTE_Recu;
 
-
-
-
 -- Using Subquery
 
-SELECT row_id ,
+SELECT row_id,
        first_value(job_role) over(PARTITION BY flag
-                                  ORDER BY row_id) AS jb_role ,
+                                  ORDER BY row_id) AS jb_role,
        skills
 FROM
-  (SELECT * ,
+  (SELECT *,
           SUM(CASE
                   WHEN job_role IS NOT NULL THEN 1
                   ELSE 0
               END) over(
                         ORDER BY row_id) AS flag
    FROM job_skills);
-
