@@ -28,7 +28,7 @@ FROM
     job_skills js;
 
 
------- Solution 2: using a FLAG or each row
+------ Solution 2: using a FLAG on each row
 
 -- Step 1 : Flag Constrution
 SELECT *,
@@ -39,7 +39,7 @@ SELECT *,
 FROM   job_skills
 
 
--- Step 2 : Suming over the Flag 
+-- Step 2 : Summing over the Flag 
 SELECT *,
 		sum(CASE
              WHEN job_role IS NULL THEN 0
@@ -90,15 +90,35 @@ from cte_skills;
 
 ------ Solution 4: More tricky Solution, using recursive queyr
 
-with recursive CTE_Recu as
-(
-	select row_id, jobrole, skills from job_skills where row_id = 1
-	UNION
-	
-)
+WITH RECURSIVE CTE_Recu AS
+  (SELECT row_id ,
+          job_role ,
+          skills
+   FROM job_skills
+   WHERE row_id = 1
+   UNION SELECT js.row_id,
+                coalesce(js.job_role, CTE_Recu.job_role) AS job_role,
+                js.skills
+   FROM CTE_Recu
+   JOIN job_skills js ON js.row_id = CTE_Recu.row_id+1)
+SELECT *
+FROM CTE_Recu;
 
 
 
 
+-- Using Subquery
 
+SELECT row_id ,
+       first_value(job_role) over(PARTITION BY flag
+                                  ORDER BY row_id) AS jb_role ,
+       skills
+FROM
+  (SELECT * ,
+          SUM(CASE
+                  WHEN job_role IS NOT NULL THEN 1
+                  ELSE 0
+              END) over(
+                        ORDER BY row_id) AS flag
+   FROM job_skills);
 
